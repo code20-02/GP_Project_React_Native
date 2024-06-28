@@ -8,7 +8,7 @@ import ChangeUsernameScreen from './screens/ChangeUsernameScreen';
 import ChangeEmailScreen from './screens/ChangeEmailScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen';
 import { ThemeProvider } from './ThemeContext';
-import OCRScreen from './screens/OCRscreen';
+import OCRScreen from './screens/OCRScreen';
 
 
 export type RootStackParamList = {

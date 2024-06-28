@@ -1,54 +1,95 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Alert } from 'react-native';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-import Tesseract from 'tesseract.js';
+import React, { useState, useEffect } from 'react';
+import { View, Button, Image, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Camera } from 'expo-camera';
+import axios from 'axios';
 
-const OCRScreen = () => {
-  const [imageUri, setImageUri] = useState(null);
-  const [recognizedText, setRecognizedText] = useState('');
+interface GoogleCloudVisionResponse {
+  responses: {
+    fullTextAnnotation?: {
+      text?: string;
+    };
+  }[];
+}
 
-  const handleCaptureImage = () => {
-    launchCamera({ mediaType: 'photo', saveToPhotos: true }, (response) => {
-        setImageUri(response.assets[0].uri);
-        processImage(response.assets[0].uri);
+const OCRScreen: React.FC = () => {
+  const [image, setImage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [text, setText] = useState('');
+  const [cameraPermission, setCameraPermission] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setCameraPermission(status === 'granted');
+    })();
+  }, []);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
     });
-  };
 
-  const handleSelectImage = () => {
-    launchImageLibrary({ mediaType: 'photo' }, (response) => {
-        setImageUri(response.assets[0].uri);
-        processImage(response.assets[0].uri);
-      
-    });
-  };
-
-  const processImage = async (uri) => {
-    setRecognizedText('Processing...');
-    try {
-      const result = await Tesseract.recognize(uri, 'eng', {
-        logger: (m) => console.log(m),
-      });
-      setRecognizedText(result.data.text);
-    } catch (error) {
-      console.error('Error recognizing text:', error);
-      setRecognizedText('Failed to recognize text.');
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setImage(result.assets[0].uri);
+      processImage(result.assets[0].uri);
     }
   };
 
+  const processImage = async (imageUri: string) => {
+    setLoading(true);
+    setText('');
+
+    try {
+      const base64 = await fetch(imageUri)
+        .then(res => res.blob())
+        .then(blob => new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }));
+
+      const response = await axios.post<GoogleCloudVisionResponse>(
+        `https://vision.googleapis.com/v1/images:annotate?key=AIzaSyAzBpeTI6QVomRZ5aoiwKaopBnAhNSwzGg`,
+        {
+          requests: [
+            {
+              image: {
+                content: base64.split(',')[1],
+              },
+              features: [{ type: 'TEXT_DETECTION' }],
+            },
+          ],
+        }
+      );
+
+      const detectedText = response.data.responses[0].fullTextAnnotation?.text;
+      setText(detectedText || 'No text detected');
+    } catch (error) {
+      console.error(error);
+      setText('Failed to process image');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (cameraPermission === null) {
+    return <View />;
+  }
+  if (cameraPermission === false) {
+    return <Text>No access to camera</Text>;
+  }
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.button} onPress={handleCaptureImage}>
-        <Text style={styles.buttonText}>Capture Image</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={handleSelectImage}>
-        <Text style={styles.buttonText}>Select Image</Text>
-      </TouchableOpacity>
-      {imageUri && (
-        <Image source={{ uri: imageUri }} style={styles.image} />
-      )}
-      {recognizedText ? (
-        <Text style={styles.text}>{recognizedText}</Text>
-      ) : null}
+      <Button title="Pick an image from camera roll" onPress={pickImage} />
+      {loading && <ActivityIndicator size="large" color="#0000ff" />}
+      {image && <Image source={{ uri: image }} style={styles.image} />}
+      {text ? <Text style={styles.text}>{text}</Text> : null}
     </View>
   );
 };
@@ -56,29 +97,19 @@ const OCRScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-  },
-  button: {
-    backgroundColor: '#6200ee',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
+    justifyContent: 'center',
+    padding: 10,
   },
   image: {
-    width: 300,
-    height: 300,
-    marginVertical: 16,
+    width: 200,
+    height: 200,
+    marginTop: 20,
   },
   text: {
+    marginTop: 20,
+    padding: 10,
     fontSize: 16,
-    textAlign: 'center',
-    marginTop: 16,
   },
 });
 

@@ -4,6 +4,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../App';
 import axios from 'axios';
 import Icon from 'react-native-vector-icons/FontAwesome'; 
+import ImagePickerComponent from './ImagePickerComponent';
 
 type MainScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -22,8 +23,6 @@ const MainScreen: React.FC<Props> = ({ navigation }) => {
       });
       const audioData = response.data.audio_data;
 
-      // Convert the audio data list back to a tensor and play it (you might need a library for audio playback)
-      // For demonstration, we use Alert to show a successful response
       Alert.alert('Play Text', 'Audio data received successfully');
     } catch (error) {
       console.error(error);
@@ -61,6 +60,7 @@ const MainScreen: React.FC<Props> = ({ navigation }) => {
       <TouchableOpacity style={styles.ocrButton} onPress={() => navigation.navigate('OCR')}>
         <Text style={styles.ocrButtonText}>OCR</Text>
       </TouchableOpacity>
+      <ImagePickerComponent /> 
     </View>
   );
 };
